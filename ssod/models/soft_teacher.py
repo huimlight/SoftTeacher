@@ -120,6 +120,9 @@ class SoftTeacher(MultiSteamDetector):
                 student_info=student_info,
             )
         )
+        '''
+        # --------------------------------------------------------
+        # SSOD_baseline.  not bbox jetter
         loss.update(
             self.unsup_rcnn_reg_loss(
                 student_info["backbone_feature"],
@@ -130,6 +133,8 @@ class SoftTeacher(MultiSteamDetector):
                 student_info=student_info,
             )
         )
+        # --------------------------------------------------------
+        '''
         return loss
 
     def rpn_loss(
@@ -221,6 +226,9 @@ class SoftTeacher(MultiSteamDetector):
             M,
             [meta["img_shape"] for meta in teacher_img_metas],
         )
+        '''
+        # -----------------------------------------------------------------------
+        # SSOD_baseline. not soft teacher
         with torch.no_grad():
             _, _scores = self.teacher.roi_head.simple_test_bboxes(
                 teacher_feat,
@@ -233,6 +241,8 @@ class SoftTeacher(MultiSteamDetector):
             assigned_label, _, _, _ = bbox_targets
             neg_inds = assigned_label == self.student.roi_head.bbox_head.num_classes
             bbox_targets[1][neg_inds] = bg_score[neg_inds].detach()
+        # -----------------------------------------------------------------------
+        '''
         loss = self.student.roi_head.bbox_head.loss(
             bbox_results["cls_score"],
             bbox_results["bbox_pred"],
@@ -392,12 +402,17 @@ class SoftTeacher(MultiSteamDetector):
             )
         )
         det_bboxes = proposal_list
+        '''
+        # ----------------------------------------------------------------------
+        # SSOD_baseline. not bbox jitter
         reg_unc = self.compute_uncertainty_with_aug(
             feat, img_metas, proposal_list, proposal_label_list
         )
         det_bboxes = [
             torch.cat([bbox, unc], dim=-1) for bbox, unc in zip(det_bboxes, reg_unc)
         ]
+        # ----------------------------------------------------------------------
+        '''
         det_labels = proposal_label_list
         teacher_info["det_bboxes"] = det_bboxes
         teacher_info["det_labels"] = det_labels

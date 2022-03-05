@@ -44,6 +44,9 @@ class SoftTeacher(MultiSteamDetector):
             sup_loss = self.student.forward_train(**data_groups["sup"])
             sup_loss = {"sup_" + k: v for k, v in sup_loss.items()}
             loss.update(**sup_loss)
+        '''
+        # ----------------------------------------------------------------
+        # only supervised train with EMA, not pseudo label
         if "unsup_student" in data_groups:
             unsup_loss = weighted_loss(
                 self.foward_unsup_train(
@@ -53,7 +56,8 @@ class SoftTeacher(MultiSteamDetector):
             )
             unsup_loss = {"unsup_" + k: v for k, v in unsup_loss.items()}
             loss.update(**unsup_loss)
-
+        # ----------------------------------------------------------------
+        '''
         return loss
 
     def foward_unsup_train(self, teacher_data, student_data):

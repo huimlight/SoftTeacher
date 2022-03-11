@@ -7,7 +7,11 @@ from ssod.utils.structure_utils import dict_split, weighted_loss
 from ssod.utils import log_image_with_boxes, log_every_n
 
 from .multi_stream_detector import MultiSteamDetector
-from .utils import Transform2D, filter_invalid
+from .utils import Transform2D, filter_invalid, dynamic_threshold
+
+from collections import Counter
+real_counter = Counter({})
+pseudo_counter = Counter({})
 
 
 @DETECTORS.register_module()
@@ -41,6 +45,12 @@ class SoftTeacher(MultiSteamDetector):
             log_every_n(
                 {"sup_gt_num": sum([len(bbox) for bbox in gt_bboxes]) / len(gt_bboxes)}
             )
+            # ----------------------------------------------------
+            global real_counter
+            gt_labels = data_groups["sup"]["gt_labels"]
+            for gt_label in gt_labels:
+                real_counter += Counter(gt_label.tolist())
+            # ----------------------------------------------------
             sup_loss = self.student.forward_train(**data_groups["sup"])
             sup_loss = {"sup_" + k: v for k, v in sup_loss.items()}
             loss.update(**sup_loss)
@@ -144,11 +154,24 @@ class SoftTeacher(MultiSteamDetector):
         if self.student.with_rpn:
             gt_bboxes = []
             for bbox in pseudo_bboxes:
+                '''
                 bbox, _, _ = filter_invalid(
                     bbox[:, :4],
                     score=bbox[
                         :, 4
                     ],  # TODO: replace with foreground score, here is classification score,
+                    thr=self.train_cfg.rpn_pseudo_threshold,
+                    min_size=self.train_cfg.min_pseduo_box_size,
+                )
+                gt_bboxes.append(bbox)
+                '''
+                bbox, _, _ = dynamic_threshold(
+                    real_counter,
+                    pseudo_counter,
+                    bbox[:, :4],
+                    score=bbox[
+                          :, 4
+                          ],  # TODO: replace with foreground score, here is classification score,
                     thr=self.train_cfg.rpn_pseudo_threshold,
                     min_size=self.train_cfg.min_pseduo_box_size,
                 )
@@ -193,6 +216,7 @@ class SoftTeacher(MultiSteamDetector):
         student_info=None,
         **kwargs,
     ):
+        '''
         gt_bboxes, gt_labels, _ = multi_apply(
             filter_invalid,
             [bbox[:, :4] for bbox in pseudo_bboxes],
@@ -200,6 +224,34 @@ class SoftTeacher(MultiSteamDetector):
             [bbox[:, 4] for bbox in pseudo_bboxes],
             thr=self.train_cfg.cls_pseudo_threshold,
         )
+        '''
+        gt_bboxes = []
+        gt_labels = []
+        for bbox, label in zip(pseudo_bboxes, pseudo_labels):
+            bbox, label, _ = dynamic_threshold(
+                real_counter,
+                pseudo_counter,
+                bbox[:, :4],
+                label,
+                score=bbox[
+                      :, 4
+                      ],  # TODO: replace with foreground score, here is classification score,
+                thr=self.train_cfg.rpn_pseudo_threshold,
+                min_size=self.train_cfg.min_pseduo_box_size,
+            )
+            gt_bboxes.append(bbox)
+            gt_labels.append(label)
+        '''
+        gt_bboxes, gt_labels, _ = multi_apply(
+            dynamic_threshold,
+            [real_counter, real_counter, real_counter],
+            [pseudo_counter, pseudo_counter, pseudo_counter],
+            [bbox[:, :4] for bbox in pseudo_bboxes],
+            pseudo_labels,
+            [bbox[:, 4] for bbox in pseudo_bboxes],
+            thr=self.train_cfg.cls_pseudo_threshold,
+        )
+        '''
         log_every_n(
             {"rcnn_cls_gt_num": sum([len(bbox) for bbox in gt_bboxes]) / len(gt_bboxes)}
         )
@@ -240,6 +292,7 @@ class SoftTeacher(MultiSteamDetector):
             *bbox_targets,
             reduction_override="none",
         )
+        #print('-----------------' + str(loss["loss_cls"]))
         loss["loss_cls"] = loss["loss_cls"].sum() / max(bbox_targets[1].sum(), 1.0)
         loss["loss_bbox"] = loss["loss_bbox"].sum() / max(
             bbox_targets[1].size()[0], 1.0
@@ -372,6 +425,28 @@ class SoftTeacher(MultiSteamDetector):
         # filter invalid box roughly
         if isinstance(self.train_cfg.pseudo_label_initial_score_thr, float):
             thr = self.train_cfg.pseudo_label_initial_score_thr
+            # ----------------------------------------------------
+            global pseudo_counter
+            global real_counter
+
+            for proposal, proposal_label in zip(proposal_list, proposal_label_list):
+                pseudo_counter += Counter(proposal_label[proposal[:, -1] >= 0.95].tolist())
+                
+            for key in pseudo_counter.keys():
+                if key not in real_counter.keys():
+                    pseudo_counter[key] = 0
+
+            pseudo_counter[-1] = 10000 - sum(pseudo_counter.values())
+
+            real_counter_copy = real_counter.copy()
+            pseudo_counter_copy = pseudo_counter.copy()
+            log_every_n(
+                dict([(str(item[0]), item[1]) for item in list(dict(real_counter_copy).items())])
+            )
+            log_every_n(
+                dict([('pseudo_'+str(item[0]), item[1]) for item in list(dict(pseudo_counter_copy).items())])
+            )
+            # ----------------------------------------------------
         else:
             # TODO: use dynamic threshold
             raise NotImplementedError("Dynamic Threshold is not implemented yet.")

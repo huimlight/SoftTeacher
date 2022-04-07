@@ -102,7 +102,7 @@ class AutoContrast(RandAug):
         for key in results.get("img_fields", ["img"]):
             img = bgr2rgb(results[key])
             results[key] = rgb2bgr(
-                np.asarray(ImageOps.autocontrast(Image.fromarray(img)), dtype=img.dtype)
+                np.asarray(ImageOps.autocontrast(Image.fromarray(img), 20), dtype=img.dtype)
             )
         return results
 

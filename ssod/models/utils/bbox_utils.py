@@ -253,3 +253,27 @@ def filter_invalid(bbox, label=None, score=None, mask=None, thr=0.0, min_size=0)
         if mask is not None:
             mask = BitmapMasks(mask.masks[valid.cpu().numpy()], mask.height, mask.width)
     return bbox, label, mask
+
+def add_fp_class(bbox, label=None, score=None, mask=None, thr=0.0, min_size=0):
+    if score is not None:
+        tp_valid = score >= 0.9
+        fp_valid = score <= 0.2
+        tp_bbox = bbox[tp_valid]
+        fp_bbox = bbox[fp_valid]
+        bbox = torch.cat((tp_bbox, fp_bbox), 0)
+        if label is not None:
+            tp_label = label[tp_valid]
+            fp_label = label[fp_valid].new_full((len(label[fp_valid]),), 80)
+            label = torch.cat((tp_label, fp_label), 0)
+        if mask is not None:
+            mask = BitmapMasks(mask.masks[tp_valid.cpu().numpy()], mask.height, mask.width)
+    if min_size is not None:
+        bw = bbox[:, 2] - bbox[:, 0]
+        bh = bbox[:, 3] - bbox[:, 1]
+        valid = (bw > min_size) & (bh > min_size)
+        bbox = bbox[valid]
+        if label is not None:
+            label = label[valid]
+        if mask is not None:
+            mask = BitmapMasks(mask.masks[valid.cpu().numpy()], mask.height, mask.width)
+    return bbox, label, mask

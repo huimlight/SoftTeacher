@@ -7,7 +7,7 @@ from ssod.utils.structure_utils import dict_split, weighted_loss
 from ssod.utils import log_image_with_boxes, log_every_n
 
 from .multi_stream_detector import MultiSteamDetector
-from .utils import Transform2D, filter_invalid
+from .utils import Transform2D, filter_invalid, add_fp_class
 
 
 @DETECTORS.register_module()
@@ -144,7 +144,7 @@ class SoftTeacher(MultiSteamDetector):
         if self.student.with_rpn:
             gt_bboxes = []
             for bbox in pseudo_bboxes:
-                bbox, _, _ = filter_invalid(
+                bbox, _, _ = add_fp_class(
                     bbox[:, :4],
                     score=bbox[
                         :, 4
@@ -194,7 +194,7 @@ class SoftTeacher(MultiSteamDetector):
         **kwargs,
     ):
         gt_bboxes, gt_labels, _ = multi_apply(
-            filter_invalid,
+            add_fp_class,
             [bbox[:, :4] for bbox in pseudo_bboxes],
             pseudo_labels,
             [bbox[:, 4] for bbox in pseudo_bboxes],

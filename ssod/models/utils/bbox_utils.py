@@ -7,6 +7,8 @@ import torch
 from mmdet.core.mask.structures import BitmapMasks
 from torch.nn import functional as F
 
+from ssod.utils import log_every_n
+
 
 def bbox2points(box):
     min_x, min_y, max_x, max_y = torch.split(box[:, :4], [1, 1, 1, 1], dim=1)
@@ -252,4 +254,39 @@ def filter_invalid(bbox, label=None, score=None, mask=None, thr=0.0, min_size=0)
             label = label[valid]
         if mask is not None:
             mask = BitmapMasks(mask.masks[valid.cpu().numpy()], mask.height, mask.width)
+    return bbox, label, mask
+
+
+def dynamic_threshold(real_counter, pseudo_counter, bbox, label=None, score=None, mask=None, thr=0.0, min_size=0, thresh_warmup=True):
+
+    classwise_acc = torch.zeros((80,)).cuda(bbox.device)
+
+    if thresh_warmup:
+        for i in range(80):  #class_number
+            classwise_acc[i] = pseudo_counter[i] / max(pseudo_counter.values())
+    else:
+        raise NotImplementedError("only implemented thresh_warmup.")
+
+    log_every_n(dict([('Threshold_'+str(item[0]), item[1]) for item in dict(zip(np.arange(80).tolist(), classwise_acc.tolist())).items()]))
+
+    if score is not None:
+        if label is None:
+            #RPN dynamic threshold
+            valid = score >= max(thr, torch.sum(classwise_acc)/len(pseudo_counter))
+            bbox = bbox[valid]
+        else:
+            valid = score.ge(thr * (classwise_acc[label] / (2. - classwise_acc[label])))
+            bbox = bbox[valid]
+            label = label[valid]
+
+    if min_size is not None:
+        bw = bbox[:, 2] - bbox[:, 0]
+        bh = bbox[:, 3] - bbox[:, 1]
+        valid = (bw > min_size) & (bh > min_size)
+        bbox = bbox[valid]
+        if label is not None:
+            label = label[valid]
+        if mask is not None:
+            mask = BitmapMasks(mask.masks[valid.cpu().numpy()], mask.height, mask.width)
+
     return bbox, label, mask

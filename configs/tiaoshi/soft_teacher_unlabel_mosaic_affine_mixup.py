@@ -110,8 +110,8 @@ model = dict(
                 max_per_img=100))),
     train_cfg=dict(
         use_teacher_proposal=False,
-        pseudo_label_initial_score_thr=0.01,
-        rpn_pseudo_threshold=0.9,
+        pseudo_label_initial_score_thr=0.3,
+        rpn_pseudo_threshold=0.7,
         cls_pseudo_threshold=0.9,
         reg_pseudo_threshold=0.02,
         jitter_times=10,
@@ -140,7 +140,7 @@ classes = ('person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
            'potted plant', 'bed', 'dining table', 'toilet', 'tv', 'laptop',
            'mouse', 'remote', 'keyboard', 'cell phone', 'microwave',
            'oven', 'toaster', 'sink', 'refrigerator', 'book', 'clock',
-           'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush','Hard_FP',)
+           'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush', 'Hard_FP',)
 
 data = dict(
     samples_per_gpu=2,

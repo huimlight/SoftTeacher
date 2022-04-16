@@ -144,7 +144,7 @@ class SoftTeacher(MultiSteamDetector):
         if self.student.with_rpn:
             gt_bboxes = []
             for bbox in pseudo_bboxes:
-                bbox, _, _ = add_fp_class(
+                bbox, _, _ = filter_invalid(
                     bbox[:, :4],
                     score=bbox[
                         :, 4
